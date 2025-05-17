@@ -257,6 +257,7 @@ Error :: union {
 
 load_from_file :: proc(filename: string, allocator := context.allocator) -> (tvg: ^Tvg, err: Error) {
     data := os2.read_entire_file(filename, allocator) or_return
+    defer delete(data, allocator)
 
     return load_from_bytes(data, allocator)
 }
@@ -471,10 +472,46 @@ load_from_bytes :: proc(data: []byte, allocator := context.allocator) -> (tvg: ^
 
 load :: proc{load_from_file, load_from_bytes}
 
-destroy :: proc(tvg: ^Tvg) {
-    free(tvg)
+destroy :: proc(tvg: ^Tvg, allocator := context.allocator) {
+    context.allocator = allocator
 
-    // TODO: free other stuff (mostly slices)
+    delete(tvg.colors)
+    for draw_cmd in tvg.draw_commands {
+        switch v in draw_cmd {
+        case FillPath:
+            for seg in v.path.segments {
+                delete(seg.instructions)
+            }
+            delete(v.path.segments)
+        case DrawLines:
+            delete(v.lines)
+        case FillPolygon:
+            delete(v.points)
+        case DrawLineLoop:
+            delete(v.points)
+        case DrawLinePath:
+            for seg in v.path.segments {
+                delete(seg.instructions)
+            }
+            delete(v.path.segments)
+        case DrawLineStrip:
+            delete(v.points)
+        case FillRectangles:
+            delete(v.rectangles)
+        case OutlineFillPath:
+            for seg in v.path.segments {
+                delete(seg.instructions)
+            }
+            delete(v.path.segments)
+        case OutlineFillPolygon:
+            delete(v.points)
+        case OutlineFillRectangles:
+            delete(v.rectangles)
+        }
+    }
+    delete(tvg.draw_commands)
+
+    free(tvg)
 }
 
 @(private, require_results)
